@@ -1,11 +1,10 @@
 import streamlit as st
 from openai import OpenAI
-from duckduckgo_search import DDGS
+import time
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Gladius Auditor", page_icon="⚔️", layout="centered")
+# --- CONFIGURACIÓN VISUAL ---
+st.set_page_config(page_title="Gladius AI", page_icon="⚔️", layout="centered")
 
-# --- ESTILOS VISUALES ---
 st.markdown("""
     <style>
     .stButton>button {
@@ -15,137 +14,96 @@ st.markdown("""
         font-weight: bold;
         padding: 0.8rem;
         border-radius: 8px;
+        border: 1px solid #333;
+    }
+    .stButton>button:hover {
+        background-color: #333;
+        border-color: #fff;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- CABECERA ---
-st.title("⚔️ GLADIUS")
-st.caption("COMITÉ DE INVERSIÓN AUTOMATIZADO | V4.0 (HYBRID KNOWLEDGE)")
+# --- HEADER ---
+st.title("⚔️ GLADIUS PRO")
+st.caption("COMITÉ DE INVERSIÓN | POWERED BY GPT-4o + CODE INTERPRETER")
 st.markdown("---")
 
-# --- SIDEBAR (INPUTS) ---
+# --- INPUTS (DATOS) ---
 st.sidebar.header("1. El Activo")
-ubicacion = st.sidebar.text_input("📍 Ubicación Exacta", value="La Cabrera, Bogota")
-tipologia = st.sidebar.selectbox("🏗️ Tipo de Inmueble", ["Apartamento Familiar", "Apartaestudio", "Casa", "Local", "Lote"])
-estado = st.sidebar.selectbox("🛠️ Estado Físico", ["Para Remodelar (Hueso)", "Buen Estado", "Nuevo / Sobre Planos"])
+ubicacion = st.sidebar.text_input("📍 Ubicación", value="La Cabrera, Bogota")
+tipologia = st.sidebar.selectbox("🏗️ Tipo", ["Apartamento Familiar", "Apartaestudio", "Local", "Lote"])
+estado = st.sidebar.selectbox("🛠️ Estado", ["Para Remodelar (Hueso)", "Buen Estado", "Nuevo"])
 
 st.sidebar.header("2. Los Números")
-precio = st.sidebar.number_input("💰 Precio de Compra (COP)", min_value=0, value=1070000000, step=10000000, format="%d")
-area = st.sidebar.number_input("📐 Área Total (m²)", min_value=10, value=200, step=1)
-admin = st.sidebar.number_input("🏢 Administración (COP)", min_value=0, value=2500000, step=50000, format="%d")
+precio = st.sidebar.number_input("💰 Precio (COP)", value=1070000000, step=10000000, format="%d")
+area = st.sidebar.number_input("📐 Área (m²)", value=200)
+admin = st.sidebar.number_input("🏢 Admin (COP)", value=2500000, step=50000, format="%d")
 
-st.sidebar.header("3. La Estrategia")
-estrategia = st.sidebar.selectbox("🎯 Objetivo Principal", 
-                                  ["Vivir (Patrimonio)", 
-                                   "Flipping (Remodelar y Vender)", 
-                                   "Renta Tradicional", 
-                                   "Airbnb"])
+st.sidebar.header("3. Estrategia")
+estrategia = st.sidebar.selectbox("🎯 Objetivo", ["Vivir (Patrimonio)", "Flipping (Venta Rápida)", "Renta Tradicional", "Airbnb"])
+ingreso = st.sidebar.number_input("💸 Ingreso Mensual Est.", value=0, help="Pon 0 si es para vivir")
 
-ingreso_est = st.sidebar.number_input("💸 Ingreso Mensual Estimado (COP)", min_value=0, value=0, step=100000, format="%d", help="Pon 0 si es para vivir")
-
-# --- LÓGICA DE BÚSQUEDA + CONOCIMIENTO ---
-def obtener_contexto_mercado(zona, tipo):
-    info_web = ""
-    try:
-        with DDGS() as ddgs:
-            q = f"precio metro cuadrado venta {tipo} {zona} 2024 2025 bogota finca raiz"
-            r = list(ddgs.text(q, max_results=3))
-            if r:
-                info_web = f"DATOS WEB RECIENTES: {str(r)}"
-    except:
-        info_web = "ADVERTENCIA: Búsqueda web falló."
-
-    # BASE DE DATOS DE RESPALDO (HARDCODED)
-    # Esto asegura que Gladius sepa de zonas clave aunque falle internet
-    referencias = """
-    REFERENCIA DE PRECIOS BOGOTÁ (SI NO HAY DATOS WEB, USA ESTO):
-    - La Cabrera / Rosales / Nogal: $10.000.000 - $16.000.000 / m2
-    - Chicó / Virrey: $9.000.000 - $14.000.000 / m2
-    - Santa Bárbara / Usaquén: $7.000.000 - $11.000.000 / m2
-    - Cedritos / Colina: $5.500.000 - $8.000.000 / m2
-    - Chapinero Alto: $7.000.000 - $10.000.000 / m2
-    """
-    
-    return info_web + "\n" + referencias
-
-# --- PROMPT MAESTRO (EL CEREBRO DESBLOQUEADO) ---
-SYSTEM_PROMPT = """
-ERES GLADIUS. TU TRABAJO ES DETECTAR VALOR, NO SOLO FLUJO DE CAJA.
-
-### REGLA DE ORO (LA LÓGICA DE 'HUESO'):
-Si la Estrategia es "Vivir" o "Flipping" o "Remodelar":
-1.  **IGNORA EL FLUJO DE CAJA NEGATIVO.** Es normal que no genere renta si voy a vivir ahí. No castigues el negocio por tener Ingreso $0.
-2.  **TU ÚNICA METRICA ES EL PRECIO/M² DE COMPRA vs. MERCADO.**
-    * Calcula: Precio Total / Área.
-    * Compara contra los "DATOS DE REFERENCIA".
-    * **SI COMPRA A MITAD DE PRECIO: ¡ES UN VERDE ROTUNDO (GO)!** No importa si el edificio es viejo. El descuento ES la ganancia.
-
-### INSTRUCCIONES DE CONTEXTO:
-Tienes acceso a una lista de "REFERENCIA DE PRECIOS BOGOTÁ".
-Si la búsqueda web falla, **USA TU CONOCIMIENTO INTERNO Y ESA LISTA**.
-Tú sabes que comprar a $5M/m² en La Cabrera es un regalo del cielo. DÍSELO.
-
-### ESTRUCTURA DE RESPUESTA (MARKDOWN):
-
-# 🏛️ EL DECRETO GLADIUS
-> **SENTENCIA:** [🟢 EJECUTAR / 🟡 RENEGOCIAR / 🔴 DESCARTAR]
-> **LA VERDAD:** [Veredicto directo. Ej: "Es el negocio del año. Compras a precio de costo en la zona más cara."]
-
-## 🔍 AUDITORÍA DE VALOR (EL TESORO)
-* **Tu Precio de Entrada:** $[Calculado]/m²
-* **Precio Real de Zona:** [Rango estimado]
-* **⚡ EQUITY INMEDIATO (GANANCIA):** [Diferencia en Millones]. 
-*(Explica que esta ganancia ya es suya al firmar).*
-
-## 📉 ANÁLISIS FINANCIERO
-*(Nota: Al ser estrategia de Patrimonio/Vivir, el flujo de caja mensual es irrelevante, nos enfocamos en la valorización).*
-
-## 🔥 RECOMENDACIÓN
-[Cierre fuerte]
-"""
-
-# --- EJECUCIÓN ---
+# --- LÓGICA DEL CEREBRO (ASSISTANTS API) ---
 if st.sidebar.button("💀 EJECUTAR AUDITORÍA", type="primary"):
-    if precio == 0 or area == 0:
-        st.error("⚠️ Faltan datos numéricos.")
-    else:
-        # Cálculos Python
-        pxm2 = precio / area
+    
+    # Validar que existan las llaves
+    if not st.secrets.get("OPENAI_API_KEY") or not st.secrets.get("OPENAI_ASSISTANT_ID"):
+        st.error("⚠️ Error de Configuración: Faltan las API Keys en Secrets.")
+        st.stop()
+
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    assistant_id = st.secrets["OPENAI_ASSISTANT_ID"]
+
+    try:
+        # 1. Crear un Hilo de conversación (Thread)
+        thread = client.beta.threads.create()
+
+        # 2. Enviar los datos del usuario al hilo
+        mensaje_usuario = f"""
+        AUDITA ESTE NEGOCIO INMOBILIARIO:
         
-        # Progreso
-        my_bar = st.progress(0, text="Interrogando al mercado...")
+        - Activo: {tipologia} en {ubicacion} ({estado})
+        - Estrategia: {estrategia}
+        - Precio Compra: ${precio:,.0f}
+        - Área: {area} m2
+        - Administración: ${admin:,.0f}
+        - Ingreso Mensual Estimado: ${ingreso:,.0f}
         
-        # Contexto Híbrido
-        contexto = obtener_contexto_mercado(ubicacion, tipologia)
-        my_bar.progress(60, text="Analizando descuento por m²...")
-        
-        # Llamada OpenAI
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        
-        user_input = f"""
-        CASO: {tipologia} en {ubicacion} ({estado}).
-        ESTRATEGIA: {estrategia}.
-        PRECIO: ${precio:,.0f}.
-        ÁREA: {area} m2.
-        PRECIO x M2 REAL: ${pxm2:,.0f}/m2.
-        INGRESO MENSUAL: ${ingreso_est:,.0f} (Si es 0, es porque vive ahí).
-        
-        CONTEXTO MERCADO:
-        {contexto}
+        Usa tu Code Interpreter para verificar el precio por m2.
+        Sé brutalmente honesto con la recomendación.
         """
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_input}
-                ],
-                temperature=0.5
-            )
-            my_bar.progress(100, text="Listo.")
-            st.markdown(response.choices[0].message.content)
+        client.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=mensaje_usuario
+        )
+
+        # 3. Ejecutar al Asistente (Run)
+        run = client.beta.threads.runs.create(
+            thread_id=thread.id,
+            assistant_id=assistant_id
+        )
+
+        # 4. Esperar a que piense (Polling)
+        with st.status("🧠 Gladius está analizando el caso...", expanded=True) as status:
+            while run.status != "completed":
+                time.sleep(1) # Esperar 1 segundo
+                run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+                
+                if run.status == "failed":
+                    st.error("❌ El análisis falló. Intenta de nuevo.")
+                    st.stop()
             
-        except Exception as e:
-            st.error(f"Error: {e}")
+            status.update(label="✅ Análisis Completado", state="complete", expanded=False)
+
+        # 5. Obtener y Mostrar Respuesta
+        mensajes = client.beta.threads.messages.list(thread_id=thread.id)
+        
+        # La respuesta más reciente es la primera en la lista
+        respuesta_final = mensajes.data[0].content[0].text.value
+        
+        st.markdown(respuesta_final)
+
+    except Exception as e:
+        st.error(f"Ocurrió un error de conexión: {e}")
