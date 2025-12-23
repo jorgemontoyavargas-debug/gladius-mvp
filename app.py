@@ -145,4 +145,98 @@ if audit_btn:
         **DECISIÓN:** [APROBADO / RECHAZADO]
         **TESIS:** [Resumen estratégico]
         
-        ### 2. SUPUESTOS
+        ### 2. SUPUESTOS ESTRUCTURALES
+        * **Remodelación:** [Valor asumido]
+        * **Deuda:** [Tasa asumida]
+        * **Salida:** [Precio venta proyectado]
+        
+        ### 3. MODELO FINANCIERO (PYTHON)
+        | Concepto | Valor |
+        | :--- | :--- |
+        | Inversión Total | ... |
+        | Utilidad Neta | ... |
+        | ROI | ... |
+        
+        ### 4. COMENTARIOS DEL CIO
+        [Cierre]
+        """
+        
+        client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg)
+        run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
+        
+        while run.status != "completed":
+            time.sleep(1)
+            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+            if run.status == "failed":
+                st.error("Error en el análisis de IA.")
+                st.stop()
+        
+        status.update(label="Análisis Finalizado", state="complete", expanded=False)
+
+    # RECUPERACIÓN DE RESPUESTA (FIX DEL LOOP)
+    mensajes = client.beta.threads.messages.list(thread_id=thread.id)
+    
+    full_text = ""
+    # Lógica para capturar todos los mensajes de respuesta en orden
+    for m in reversed(mensajes.data):
+        if m.role == "assistant":
+            for c in m.content:
+                if c.type == "text":
+                    full_text += c.text.value + "\n\n"
+    
+    st.session_state.messages.append({"role": "assistant", "content": full_text})
+    st.rerun()
+
+# --- 6. VISUALIZACIÓN DE RESULTADOS ---
+if st.session_state.messages:
+    # 6.1 DASHBOARD DE INDICADORES (KPIs)
+    # Calculamos algunos KPIs básicos en vivo para "adornar" el reporte
+    px_m2 = precio / area
+    
+    st.divider()
+    st.subheader("📊 Tablero de Control")
+    
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Precio Entrada / m²", f"${px_m2/1000000:,.1f}M", help="Calculado sobre precio base")
+    k2.metric("Estado Físico", "Hueso" if "Remodelar" in estado else "Estándar", delta="Oportunidad CAPEX" if "Remodelar" in estado else "Listo para usar")
+    k3.metric("Estrategia", estrategia.split(" ")[0], delta_color="off")
+    
+    st.divider()
+
+    # 6.2 EL MEMORANDO (CHAT)
+    last_msg = st.session_state.messages[-1]["content"]
+    with st.chat_message("assistant", avatar="🦅"):
+        st.markdown(last_msg)
+
+    # 6.3 EVIDENCIA
+    with st.expander("🔎 Ver Inteligencia de Mercado (Fuente de Datos)"):
+        st.info(st.session_state.market_data)
+
+# --- 7. CHAT PARA REFINAR ---
+if prompt := st.chat_input("Dile al CIO: 'Ajusta la obra a 200M' o 'Calcula salida a 5 años'"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+    
+    client.beta.threads.messages.create(thread_id=st.session_state.thread_id, role="user", content=prompt)
+    run = client.beta.threads.runs.create(thread_id=st.session_state.thread_id, assistant_id=assistant_id)
+    
+    with st.spinner("Recalculando modelo..."):
+        while run.status != "completed":
+            time.sleep(1)
+            run = client.beta.threads.runs.retrieve(thread_id=st.session_state.thread_id, run_id=run.id)
+            
+    # RECUPERACIÓN (MISMO FIX)
+    mensajes = client.beta.threads.messages.list(thread_id=st.session_state.thread_id)
+    full_resp = ""
+    for m in reversed(mensajes.data):
+         # Truco simple: Tomar solo los últimos mensajes después del user
+         # (Simplificado para este MVP: tomamos el último bloque del asistente)
+         pass 
+    
+    # Tomamos el mensaje más reciente del asistente
+    final_ans = mensajes.data[0].content[0].text.value
+    
+    with st.chat_message("assistant", avatar="🦅"):
+        st.markdown(final_ans)
+    st.session_state.messages.append({"role": "assistant", "content": final_ans})
