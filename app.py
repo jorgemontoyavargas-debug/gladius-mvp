@@ -3,10 +3,9 @@ from openai import OpenAI
 from duckduckgo_search import DDGS
 import time
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Gladius Pro", page_icon="🏛️", layout="wide")
 
-# --- ESTILOS CSS (UI LIMPIA) ---
 st.markdown("""
     <style>
     .stChatMessage {
@@ -23,17 +22,13 @@ st.markdown("""
         padding: 0.7rem;
         border-radius: 8px;
     }
-    .stButton>button:hover {
-        background-color: #333;
-        border-color: #000;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR (INPUTS SIMPLES) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.title("🏛️ GLADIUS PRO")
-    st.caption("Powered by GPT-4o + Real Time Data")
+    st.caption("Fix: Recuperación de Respuesta Completa")
     st.markdown("---")
     
     st.subheader("1. El Activo")
@@ -56,114 +51,101 @@ with st.sidebar:
     if st.button("🔄 Nueva Auditoría"):
         st.session_state.messages = []
         st.session_state.thread_id = None
-        st.session_state.run_started = False
         st.rerun()
 
-# --- GESTIÓN DE ESTADO ---
+# --- ESTADO ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = None
 
-# Validar secretos
 if not st.secrets.get("OPENAI_API_KEY") or not st.secrets.get("OPENAI_ASSISTANT_ID"):
-    st.error("⚠️ Faltan las llaves de OpenAI en los 'Secrets'. Configúralas en el dashboard de Streamlit.")
+    st.error("⚠️ Faltan Secrets.")
     st.stop()
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 assistant_id = st.secrets["OPENAI_ASSISTANT_ID"]
 
-# --- FUNCIÓN DE BÚSQUEDA (MARKET INTEL) ---
+# --- FUNCIÓN BÚSQUEDA ---
 def get_market_intel():
-    """Busca tasas y precios en tiempo real para darle contexto al modelo"""
     try:
         with DDGS() as ddgs:
-            # Busca tasas de crédito HOY
             q_rates = "tasas interes credito hipotecario vivienda colombia bancos actual 2025"
             r_rates = list(ddgs.text(q_rates, max_results=2))
-            # Busca precios zona HOY
             q_price = f"precio metro cuadrado venta {ubicacion} finca raiz 2024 2025"
             r_price = list(ddgs.text(q_price, max_results=2))
-            
             return f"MARKET INTELLIGENCE (WEB):\nTASAS: {str(r_rates)}\nPRECIOS ZONA: {str(r_price)}"
     except:
-        return "MARKET INTELLIGENCE: No disponible (Error de conexión). Usa tus defaults internos."
+        return "MARKET INTELLIGENCE: No disponible. Usa defaults."
 
-# --- PANTALLA PRINCIPAL (BIENVENIDA) ---
+# --- BIENVENIDA ---
 if not st.session_state.messages:
     col_main, _ = st.columns([3,1])
     with col_main:
-        st.title("Tu Socio de Inversión IA")
-        st.markdown(f"""
-        **Estás operando con Gladius Pro (GPT-4o).**
-        
-        Este sistema está diseñado para velocidad y criterio:
-        1.  **Investiga:** Busca tasas y precios de mercado en tiempo real.
-        2.  **Propone:** Si faltan datos (Obra, Deuda), asume "Defaults Expertos" y te los presenta.
-        3.  **Calcula:** Usa Python para modelar el escenario financiero.
-        
-        *Configura los datos a la izquierda y presiona GENERAR TESIS.*
-        """)
+        st.title("Socio de Inversión IA")
+        st.write("Configura el caso a la izquierda y dale a GENERAR.")
 
-# --- LÓGICA DE EJECUCIÓN (EL CEREBRO) ---
+# --- LÓGICA PRINCIPAL ---
 if audit_btn and not st.session_state.thread_id:
-    # 1. Feedback inmediato al usuario
-    with st.status("🧠 Gladius está analizando el negocio...", expanded=True) as status:
-        st.write("📡 Recolectando inteligencia de mercado (Tasas/Precios)...")
+    with st.status("🧠 Gladius está analizando...", expanded=True) as status:
+        st.write("📡 Investigando mercado...")
         intel = get_market_intel()
+        st.write("🏗️ Modelando escenario...")
         
-        st.write("🏗️ Estructurando Tesis de Inversión y Supuestos...")
-        
-        # 2. Crear Thread
         thread = client.beta.threads.create()
         st.session_state.thread_id = thread.id
         
-        # 3. Prompt de Usuario (ESTO ACTIVA EL MODO "SOCIO SENIOR")
-        mensaje_inicial = f"""
-        NUEVO DEAL PARA ANÁLISIS:
+        msg = f"""
+        NUEVO DEAL:
         - Activo: {tipologia} en {ubicacion} ({estado}).
-        - Precio Entrada: ${precio:,.0f} ({area} m2).
+        - Precio: ${precio:,.0f} ({area} m2).
         - Estrategia: {estrategia}.
         
-        DATA DE MERCADO (REAL-TIME):
+        DATA REAL-TIME:
         {intel}
         
         INSTRUCCIÓN:
-        Actúa como mi Socio Senior (CIO).
-        NO ME HAGAS PREGUNTAS DE ENTRADA.
-        Si falta información (Costos de obra, Condiciones de Deuda, Precio de Salida), LLENA LOS VACÍOS con tus "Defaults de Experto" (basados en la zona y el mercado).
-        
-        Calcula los números en Python y DAME LA TESIS DE INVERSIÓN YA.
-        Avisa claramente qué supuestos usaste para que yo pueda corregirlos si es necesario.
+        1. Asume los costos/tasas faltantes (Defaults Expertos).
+        2. Calcula en Python.
+        3. Escribe el REPORTE COMPLETO (Summary -> Supuestos -> Modelo -> Remarks).
         """
         
-        client.beta.threads.messages.create(thread_id=thread.id, role="user", content=mensaje_inicial)
+        client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg)
         run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
         
-        # 4. Esperar respuesta
         while run.status != "completed":
             time.sleep(1)
             run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
             if run.status == "failed":
-                st.error("Error en el análisis del Asistente.")
+                st.error("Fallo en OpenAI.")
                 st.stop()
         
-        status.update(label="Tesis Generada", state="complete", expanded=False)
-        
-    # 5. Mostrar respuesta inicial
+        status.update(label="Listo", state="complete", expanded=False)
+
+    # --- FIX DE RECUPERACIÓN (AQUÍ ESTÁ LA MAGIA) ---
     mensajes = client.beta.threads.messages.list(thread_id=thread.id)
-    rta = mensajes.data[0].content[0].text.value
-    st.session_state.messages.append({"role": "assistant", "content": rta})
+    
+    # Recogemos TODO lo que dijo el asistente en este turno (puede ser 1 o más mensajes)
+    full_response = ""
+    for msg in mensajes.data:
+        if msg.role == "user":
+            break # Paramos al llegar a tu pregunta
+        if msg.role == "assistant":
+            for content in msg.content:
+                if content.type == "text":
+                    # Concatenamos al principio porque la lista viene invertida (más nuevo primero)
+                    full_response = content.text.value + "\n\n" + full_response
+    
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
     st.rerun()
 
-# --- INTERFAZ DE CHAT (PARA CORRECCIONES) ---
+# --- CHAT ---
 for msg in st.session_state.messages:
     avatar = "🏛️" if msg["role"] == "assistant" else "👤"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
-# --- INPUT PARA CHAT ---
-if prompt := st.chat_input("Corrige los supuestos o pide profundizar..."):
+if prompt := st.chat_input("Corrige supuestos..."):
     if st.session_state.thread_id:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="👤"):
@@ -173,12 +155,21 @@ if prompt := st.chat_input("Corrige los supuestos o pide profundizar..."):
         run = client.beta.threads.runs.create(thread_id=st.session_state.thread_id, assistant_id=assistant_id)
         
         with st.chat_message("assistant", avatar="🏛️"):
-            with st.spinner("Recalculando modelo..."):
+            with st.spinner("Pensando..."):
                 while run.status != "completed":
                     time.sleep(1)
                     run = client.beta.threads.runs.retrieve(thread_id=st.session_state.thread_id, run_id=run.id)
             
+            # --- MISMO FIX PARA EL CHAT ---
             mensajes = client.beta.threads.messages.list(thread_id=st.session_state.thread_id)
-            rta = mensajes.data[0].content[0].text.value
-            st.markdown(rta)
-            st.session_state.messages.append({"role": "assistant", "content": rta})
+            full_response = ""
+            for msg in mensajes.data:
+                if msg.role == "user":
+                    break
+                if msg.role == "assistant":
+                    for content in msg.content:
+                        if content.type == "text":
+                            full_response = content.text.value + "\n\n" + full_response
+            
+            st.markdown(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
