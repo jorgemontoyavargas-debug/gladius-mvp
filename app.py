@@ -15,134 +15,124 @@ st.markdown("""
         font-weight: bold;
         padding: 0.8rem;
         border-radius: 8px;
-        border: 1px solid #333;
     }
-    .stButton>button:hover {
-        background-color: #333333;
-        color: white;
-        border: 1px solid #fff;
-    }
-    h1 { color: #000; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- CABECERA ---
 st.title("⚔️ GLADIUS")
-st.caption("COMITÉ DE INVERSIÓN AUTOMATIZADO | V3.0 (SEARCH + REASONING)")
+st.caption("COMITÉ DE INVERSIÓN AUTOMATIZADO | V4.0 (HYBRID KNOWLEDGE)")
 st.markdown("---")
 
 # --- SIDEBAR (INPUTS) ---
 st.sidebar.header("1. El Activo")
-ubicacion = st.sidebar.text_input("📍 Ubicación Exacta", placeholder="Ej: La Cabrera, Calle 85, Bogotá")
-tipologia = st.sidebar.selectbox("🏗️ Tipo de Inmueble", ["Apartamento Familiar", "Apartaestudio / Loft", "Casa", "Local Comercial", "Lote"])
-estado = st.sidebar.selectbox("🛠️ Estado Físico", ["Nuevo / Sobre Planos", "Usado (Buen estado)", "Para Remodelar (Hueso)"])
+ubicacion = st.sidebar.text_input("📍 Ubicación Exacta", value="La Cabrera, Bogota")
+tipologia = st.sidebar.selectbox("🏗️ Tipo de Inmueble", ["Apartamento Familiar", "Apartaestudio", "Casa", "Local", "Lote"])
+estado = st.sidebar.selectbox("🛠️ Estado Físico", ["Para Remodelar (Hueso)", "Buen Estado", "Nuevo / Sobre Planos"])
 
 st.sidebar.header("2. Los Números")
-precio = st.sidebar.number_input("💰 Precio de Compra (COP)", min_value=0, step=10000000, format="%d")
-area = st.sidebar.number_input("📐 Área Total (m²)", min_value=10, step=1)
-admin = st.sidebar.number_input("🏢 Administración (COP)", min_value=0, step=50000, format="%d")
+precio = st.sidebar.number_input("💰 Precio de Compra (COP)", min_value=0, value=1070000000, step=10000000, format="%d")
+area = st.sidebar.number_input("📐 Área Total (m²)", min_value=10, value=200, step=1)
+admin = st.sidebar.number_input("🏢 Administración (COP)", min_value=0, value=2500000, step=50000, format="%d")
 
 st.sidebar.header("3. La Estrategia")
 estrategia = st.sidebar.selectbox("🎯 Objetivo Principal", 
                                   ["Vivir (Patrimonio)", 
-                                   "Renta Tradicional (Flujo)", 
-                                   "Airbnb / Rentas Cortas", 
-                                   "Flipping (Comprar, Remodelar, Vender)"])
+                                   "Flipping (Remodelar y Vender)", 
+                                   "Renta Tradicional", 
+                                   "Airbnb"])
 
-ingreso_est = st.sidebar.number_input("💸 Ingreso Mensual Estimado (COP)", min_value=0, step=100000, format="%d", help="Canon esperado o Promedio Airbnb")
+ingreso_est = st.sidebar.number_input("💸 Ingreso Mensual Estimado (COP)", min_value=0, value=0, step=100000, format="%d", help="Pon 0 si es para vivir")
 
-# --- LÓGICA DE BÚSQUEDA (LOS OJOS) ---
-def buscar_contexto(zona, tipo):
+# --- LÓGICA DE BÚSQUEDA + CONOCIMIENTO ---
+def obtener_contexto_mercado(zona, tipo):
+    info_web = ""
     try:
         with DDGS() as ddgs:
-            # Buscamos precios de venta recientes
-            q1 = f"precio metro cuadrado venta {tipo} {zona} 2024 2025 bogota finca raiz"
-            r1 = list(ddgs.text(q1, max_results=3))
-            contexto = f"DATAZO DE INTERNET (Venta): {str(r1)}\n"
-            
-            # Buscamos precios de arriendo
-            q2 = f"precio arriendo {tipo} {zona} 2024 2025 metrocuadrado"
-            r2 = list(ddgs.text(q2, max_results=2))
-            contexto += f"DATAZO DE INTERNET (Renta): {str(r2)}"
-            return contexto
+            q = f"precio metro cuadrado venta {tipo} {zona} 2024 2025 bogota finca raiz"
+            r = list(ddgs.text(q, max_results=3))
+            if r:
+                info_web = f"DATOS WEB RECIENTES: {str(r)}"
     except:
-        return "No se pudo conectar a internet. Usa tu base de conocimiento interna."
+        info_web = "ADVERTENCIA: Búsqueda web falló."
 
-# --- PROMPT MAESTRO (EL CEREBRO SENIOR) ---
+    # BASE DE DATOS DE RESPALDO (HARDCODED)
+    # Esto asegura que Gladius sepa de zonas clave aunque falle internet
+    referencias = """
+    REFERENCIA DE PRECIOS BOGOTÁ (SI NO HAY DATOS WEB, USA ESTO):
+    - La Cabrera / Rosales / Nogal: $10.000.000 - $16.000.000 / m2
+    - Chicó / Virrey: $9.000.000 - $14.000.000 / m2
+    - Santa Bárbara / Usaquén: $7.000.000 - $11.000.000 / m2
+    - Cedritos / Colina: $5.500.000 - $8.000.000 / m2
+    - Chapinero Alto: $7.000.000 - $10.000.000 / m2
+    """
+    
+    return info_web + "\n" + referencias
+
+# --- PROMPT MAESTRO (EL CEREBRO DESBLOQUEADO) ---
 SYSTEM_PROMPT = """
-ERES GLADIUS. No eres un chatbot. Eres un SOCIO SENIOR DE INVERSIÓN.
-Tu trabajo no es ser amable. Es proteger el capital del usuario.
+ERES GLADIUS. TU TRABAJO ES DETECTAR VALOR, NO SOLO FLUJO DE CAJA.
 
-### TUS REGLAS INQUEBRANTABLES:
-1.  **DECISION-AS-A-SERVICE:** Empieza SIEMPRE con un veredicto binario.
-2.  **LÓGICA DE NEGOCIO (EL JUEZ):**
-    * **SI LA ESTRATEGIA ES "VIVIR", "FLIPPING" O "REMODELAR":**
-        * Tu Dios es el **PRECIO POR M² DE COMPRA** vs. **PRECIO DE MERCADO**.
-        * Si el usuario compra con -20% de descuento (Equity Instantáneo), es un **🟢 GO DEAL**, aunque el flujo de caja sea neutro.
-        * *Razón:* "Se gana en la compra, no en la venta".
-    * **SI LA ESTRATEGIA ES "RENTA" O "AIRBNB":**
-        * Tu Dios es el **CASHFLOW (Flujo de Caja)**.
-        * Si el arriendo no paga la operación, es un **🔴 KILL DEAL**, a menos que el precio sea ridículamente bajo.
+### REGLA DE ORO (LA LÓGICA DE 'HUESO'):
+Si la Estrategia es "Vivir" o "Flipping" o "Remodelar":
+1.  **IGNORA EL FLUJO DE CAJA NEGATIVO.** Es normal que no genere renta si voy a vivir ahí. No castigues el negocio por tener Ingreso $0.
+2.  **TU ÚNICA METRICA ES EL PRECIO/M² DE COMPRA vs. MERCADO.**
+    * Calcula: Precio Total / Área.
+    * Compara contra los "DATOS DE REFERENCIA".
+    * **SI COMPRA A MITAD DE PRECIO: ¡ES UN VERDE ROTUNDO (GO)!** No importa si el edificio es viejo. El descuento ES la ganancia.
 
-3.  **TONO DE VOZ:**
-    * Directo, cínico, profesional, "Anti-Bullshit".
-    * Si el usuario trae un mal negocio, humíllalo con elegancia (con números).
-    * Si trae una joya, felicítalo por encontrar la falla en la Matrix.
+### INSTRUCCIONES DE CONTEXTO:
+Tienes acceso a una lista de "REFERENCIA DE PRECIOS BOGOTÁ".
+Si la búsqueda web falla, **USA TU CONOCIMIENTO INTERNO Y ESA LISTA**.
+Tú sabes que comprar a $5M/m² en La Cabrera es un regalo del cielo. DÍSELO.
 
-4.  **ESTRUCTURA DE RESPUESTA (OBLIGATORIA EN MARKDOWN):**
+### ESTRUCTURA DE RESPUESTA (MARKDOWN):
 
-    # 🏛️ EL DECRETO GLADIUS
-    > **SENTENCIA:** [🟢 EJECUTAR / 🟡 RENEGOCIAR / 🔴 DESCARTAR]
-    > **LA VERDAD CRUDA:** [Aquí explica por qué, en 3 líneas duras. Ataca la lógica del usuario si es necesario.]
+# 🏛️ EL DECRETO GLADIUS
+> **SENTENCIA:** [🟢 EJECUTAR / 🟡 RENEGOCIAR / 🔴 DESCARTAR]
+> **LA VERDAD:** [Veredicto directo. Ej: "Es el negocio del año. Compras a precio de costo en la zona más cara."]
 
-    ## 🔍 AUDITORÍA DE VALOR (TU COMPRA vs. MERCADO)
-    * **Tu Precio:** $[X]/m²
-    * **Mercado Real (Detectado):** $[Y]/m²
-    * **⚡ EQUITY DÍA 1:** [Calcula: (Mercado - Tu Precio) * Area]. (Si es positivo: "Te ganaste esto firmando". Si es negativo: "Perdiste esto firmando").
+## 🔍 AUDITORÍA DE VALOR (EL TESORO)
+* **Tu Precio de Entrada:** $[Calculado]/m²
+* **Precio Real de Zona:** [Rango estimado]
+* **⚡ EQUITY INMEDIATO (GANANCIA):** [Diferencia en Millones]. 
+*(Explica que esta ganancia ya es suya al firmar).*
 
-    ## 📊 LA REALIDAD FINANCIERA
-    [Tabla simple con Ingresos, Gastos (Admin + Predial estimado), NOI Anual y Cap Rate]
+## 📉 ANÁLISIS FINANCIERO
+*(Nota: Al ser estrategia de Patrimonio/Vivir, el flujo de caja mensual es irrelevante, nos enfocamos en la valorización).*
 
-    ## 🔥 RECOMENDACIÓN FINAL
-    [Una frase matadora para cerrar]
-
+## 🔥 RECOMENDACIÓN
+[Cierre fuerte]
 """
 
-# --- BOTÓN DE EJECUCIÓN ---
+# --- EJECUCIÓN ---
 if st.sidebar.button("💀 EJECUTAR AUDITORÍA", type="primary"):
-    if precio == 0 or ubicacion == "":
-        st.error("⚠️ Sin datos no hay paraíso. Dame Ubicación y Precio.")
+    if precio == 0 or area == 0:
+        st.error("⚠️ Faltan datos numéricos.")
     else:
-        # 1. CÁLCULOS PREVIOS (Para ayudar a la IA)
+        # Cálculos Python
         pxm2 = precio / area
-        noi = (ingreso_est - admin) * 12
-        cap_rate_est = (noi / precio) * 100 if precio > 0 else 0
         
-        # 2. INDICADOR DE PROGRESO
-        progress_text = "Gladius está interrogando al mercado..."
-        my_bar = st.progress(0, text=progress_text)
+        # Progreso
+        my_bar = st.progress(0, text="Interrogando al mercado...")
         
-        # 3. BÚSQUEDA WEB
-        datos_mercado = buscar_contexto(ubicacion, tipologia)
-        my_bar.progress(50, text="Analizando viabilidad financiera...")
+        # Contexto Híbrido
+        contexto = obtener_contexto_mercado(ubicacion, tipologia)
+        my_bar.progress(60, text="Analizando descuento por m²...")
         
-        # 4. LLAMADA A OPENAI
+        # Llamada OpenAI
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         
-        user_prompt = f"""
-        AUDITA ESTE CASO REAL:
-        - Activo: {tipologia} en {ubicacion} ({estado}).
-        - Estrategia: {estrategia}.
-        - Precio: ${precio:,.0f} (equivale a ${pxm2:,.0f} / m²).
-        - Ingreso Mensual: ${ingreso_est:,.0f}.
-        - Admin: ${admin:,.0f}.
+        user_input = f"""
+        CASO: {tipologia} en {ubicacion} ({estado}).
+        ESTRATEGIA: {estrategia}.
+        PRECIO: ${precio:,.0f}.
+        ÁREA: {area} m2.
+        PRECIO x M2 REAL: ${pxm2:,.0f}/m2.
+        INGRESO MENSUAL: ${ingreso_est:,.0f} (Si es 0, es porque vive ahí).
         
-        DATOS DUROS (Contexto de Internet):
-        {datos_mercado}
-        
-        CALCULADORA AUXILIAR (Para que no falles):
-        - Cap Rate Bruto: {cap_rate_est:.2f}%
-        - Costo por m2: ${pxm2:,.0f}
+        CONTEXTO MERCADO:
+        {contexto}
         """
 
         try:
@@ -150,16 +140,12 @@ if st.sidebar.button("💀 EJECUTAR AUDITORÍA", type="primary"):
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_input}
                 ],
-                temperature=0.6 # Un poco más creativo para el "tono", pero controlado
+                temperature=0.5
             )
-            my_bar.progress(100, text="Auditoría Completada.")
+            my_bar.progress(100, text="Listo.")
             st.markdown(response.choices[0].message.content)
             
-            # Debug (Opcional: ver qué encontró en internet)
-            with st.expander("🕵️ Ver qué encontró Gladius en internet"):
-                st.write(datos_mercado)
-
         except Exception as e:
-            st.error(f"Error cerebral: {e}")
+            st.error(f"Error: {e}")
