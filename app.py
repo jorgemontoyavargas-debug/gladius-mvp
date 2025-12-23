@@ -2,52 +2,56 @@ import streamlit as st
 from openai import OpenAI
 from duckduckgo_search import DDGS
 import time
+import json
 
-# --- 1. CONFIGURACIÓN "PRIVATE EQUITY" ---
-st.set_page_config(page_title="Gladius Terminal", page_icon="🦅", layout="wide")
+# --- 1. CONFIGURACIÓN "INSTITUTIONAL GRADE" ---
+st.set_page_config(page_title="Gladius Terminal", page_icon="🏛️", layout="wide")
 
-# CSS para que se vea costoso (Dark Mode elegante)
+# CSS: Estilo Limpio, Profesional y de Alto Contraste (Tipo Reporte Bancario)
 st.markdown("""
     <style>
+    /* Fondo limpio y tipografía ejecutiva */
     .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
+        background-color: #ffffff;
+        color: #000000;
     }
-    .metric-card {
-        background-color: #1e1e1e;
-        border: 1px solid #333;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-    }
+    /* Botones de Acción (Estilo Call-to-Action) */
     .stButton>button {
         width: 100%;
-        background-color: #00d26a; /* Verde Dinero */
-        color: black;
-        font-weight: 800;
+        background-color: #000000;
+        color: #ffffff;
+        font-weight: 600;
+        border-radius: 6px;
+        padding: 0.6rem;
         border: none;
-        padding: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #00b359;
-        box-shadow: 0 0 15px rgba(0, 210, 106, 0.4);
+        background-color: #333333;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    h1, h2, h3 { font-family: 'Helvetica Neue', sans-serif; font-weight: 300; }
-    .status-box { padding: 10px; border-radius: 5px; margin-bottom: 10px; font-size: 0.9em;}
-    .status-success { background-color: rgba(0, 210, 106, 0.1); border-left: 3px solid #00d26a; color: #00d26a; }
-    .status-danger { background-color: rgba(255, 75, 75, 0.1); border-left: 3px solid #ff4b4b; color: #ff4b4b; }
+    /* Tarjetas de Chat más limpias */
+    .stChatMessage {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 1.5rem;
+    }
+    /* Métricas destacadas */
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+        font-weight: 700;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR (LA MESA DE TRADING) ---
+# --- 2. SIDEBAR (PANEL DE CONTROL) ---
 with st.sidebar:
-    st.title("🦅 GLADIUS")
-    st.markdown("*Private Equity AI Partner*")
+    st.title("🏛️ GLADIUS")
+    st.caption("Private Equity Partner | AI-Powered")
     st.markdown("---")
     
-    st.caption("CONFIGURACIÓN DEL DEAL")
+    st.subheader("1. Configuración del Deal")
     ubicacion = st.text_input("📍 Ubicación", value="La Cabrera, Bogota")
     estrategia = st.selectbox("🎯 Estrategia", ["Flipping (Comprar-Remodelar-Vender)", "Vivir (Patrimonio)", "Renta Tradicional", "Airbnb"])
     
@@ -63,7 +67,7 @@ with st.sidebar:
     st.markdown("---")
     audit_btn = st.button("⚡ EJECUTAR ANÁLISIS")
     
-    if st.button("🔄 Reset Terminal"):
+    if st.button("🔄 Nueva Operación"):
         st.session_state.clear()
         st.rerun()
 
@@ -72,123 +76,73 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "thread_id" not in st.session_state: st.session_state.thread_id = None
 if "market_data" not in st.session_state: st.session_state.market_data = None
 
+# VALIDACIÓN DE SECRETOS
+if not st.secrets.get("OPENAI_API_KEY") or not st.secrets.get("OPENAI_ASSISTANT_ID"):
+    st.warning("⚠️ Faltan las llaves de API en Secrets.")
+    st.stop()
+
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 assistant_id = st.secrets["OPENAI_ASSISTANT_ID"]
 
-# --- 4. INTELIGENCIA (SEARCH) ---
+# --- 4. INTELIGENCIA DE MERCADO ---
 def get_intel():
-    with DDGS() as ddgs:
-        q1 = f"precio metro cuadrado venta {ubicacion} finca raiz 2024 2025"
-        q2 = "tasas interes credito hipotecario vivienda colombia bancos hoy 2025"
-        return f"DATA REAL: {str(list(ddgs.text(q1, max_results=2)))} | TASAS: {str(list(ddgs.text(q2, max_results=2)))}"
+    try:
+        with DDGS() as ddgs:
+            q1 = f"precio metro cuadrado venta {ubicacion} finca raiz 2024 2025"
+            q2 = "tasas interes credito hipotecario vivienda colombia bancos hoy 2025"
+            # Traemos un poco más de contexto
+            r1 = list(ddgs.text(q1, max_results=2))
+            r2 = list(ddgs.text(q2, max_results=2))
+            return f"DATAZO REAL (PRECIOS): {str(r1)} | DATAZO REAL (TASAS): {str(r2)}"
+    except:
+        return "DATA WEB NO DISPONIBLE. (Usa defaults)"
 
-# --- 5. UI PRINCIPAL (DASHBOARD) ---
+# --- 5. DASHBOARD PRINCIPAL ---
 if not st.session_state.messages:
-    st.title("Bienvenido al Comité de Inversión.")
+    # Landing limpia
+    st.markdown("## 🦅 Panel de Decisión de Inversión")
     st.markdown("""
-    > *"El precio es lo que pagas. El valor es lo que obtienes."* — Warren Buffett
+    Bienvenido al terminal de **Gladius**. 
+    Este sistema utiliza **Inteligencia de Mercado en Tiempo Real** + **Modelado Financiero** para auditar oportunidades.
     
-    Gladius está listo para auditar tu oportunidad en **La Cabrera**.
-    Configura los parámetros a la izquierda y **Ejecuta**.
+    **Instrucciones:**
+    1. Define los parámetros del activo a la izquierda.
+    2. Ejecuta el análisis.
+    3. Recibe un Memorando de Inversión profesional.
     """)
 
 if audit_btn:
-    with st.status("🦅 Gladius está trabajando...", expanded=True) as status:
-        st.write("📡 Escaneando mercado en tiempo real...")
+    with st.status("🦅 Gladius está auditando el activo...", expanded=True) as status:
+        st.write("📡 Conectando con fuentes de mercado (Tasas/Precios)...")
         intel = get_intel()
-        st.session_state.market_data = intel # Guardar para mostrar
+        st.session_state.market_data = intel
         
-        st.write("🧮 Modelando escenarios financieros en Python...")
+        st.write("🧮 Corriendo modelo financiero en Python...")
         
-        # CREAR THREAD & RUN
         thread = client.beta.threads.create()
         st.session_state.thread_id = thread.id
         
+        # PROMPT DE EJECUCIÓN (MODO SOCIO SENIOR)
         msg = f"""
-        ACTÚA COMO UN SOCIO SENIOR DE PRIVATE EQUITY.
-        DEAL: {tipo} en {ubicacion} ({estado}). Precio: ${precio:,.0f} ({area}m2). Estrategia: {estrategia}.
-        CONTEXTO WEB: {intel}
+        ACTÚA COMO UN CIO DE PRIVATE EQUITY.
+        
+        DEAL: {tipo} en {ubicacion} ({estado}).
+        PRECIO: ${precio:,.0f} ({area}m2).
+        ESTRATEGIA: {estrategia}.
+        
+        CONTEXTO DE MERCADO (REAL): {intel}
         
         TU MISIÓN:
-        1. Asume los costos de obra (lujo/std) y deuda (tasa actual) SIN PREGUNTAR.
-        2. Calcula: Equity Instantáneo, ROI, Utilidad Neta.
-        3. Escribe un MEMORANDO DE INVERSIÓN corto pero contundente.
-        4. USA FORMATO JSON para los números clave al final de tu respuesta así:
-        {{ "veredicto": "APROBADO", "equity": "$XXX M", "roi": "XX%", "mensaje": "Tu resumen aquí" }}
-        """
+        1. ASUME los costos faltantes (Obra, Deuda) usando criterio de experto y el contexto web.
+        2. CALCULA: Inversión Total, Equity, ROI y Utilidad.
+        3. REDACTA EL MEMORANDO.
         
-        client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg)
-        run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
+        FORMATO OBLIGATORIO DE SALIDA (MARKDOWN):
         
-        while run.status != "completed":
-            time.sleep(1)
-            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+        # 🦅 MEMORANDO DE INVERSIÓN
         
-        status.update(label="Análisis Completado", state="complete", expanded=False)
-
-    # RECUPERAR RESPUESTA
-    msgs = client.beta.threads.messages.list(thread_id=thread.id)
-    full_text = msgs.data[0].content[0].text.value
-    st.session_state.messages.append({"role": "assistant", "content": full_text})
-    st.rerun()
-
-# --- 6. RENDERIZADO DEL RESULTADO (EL "WOW") ---
-if st.session_state.messages:
-    last_msg = st.session_state.messages[-1]["content"]
-    
-    # INTENTO DE PARSEAR DATOS CLAVE (SI EL GPT OBEDECIÓ EL JSON O TEXTO)
-    # Aquí hacemos un truco visual: Extraemos lo "duro" del texto para el Dashboard
-    
-    st.divider()
-    
-    # HEADER DEL VEREDICTO
-    col_v1, col_v2 = st.columns([1, 4])
-    with col_v1:
-        st.markdown("# 🦅")
-    with col_v2:
-        st.markdown("### MEMORANDO DE INVERSIÓN")
-        st.caption(f"Ref: {ubicacion} | {time.strftime('%d/%m/%Y')}")
-
-    # DASHBOARD DE MÉTRICAS (LO QUE VENDE)
-    # Nota: En una versión V6, haremos que GPT devuelva JSON puro para llenar esto dinámicamente.
-    # Por ahora, dejamos que el texto hable, pero ponemos metricas visuales estáticas o calculadas en Python aqui mismo.
-    
-    st.markdown("### 📊 INDICADORES CLAVE (Proyección)")
-    kpi1, kpi2, kpi3 = st.columns(3)
-    
-    # Calculos rápidos para "adornar" mientras leemos el texto
-    px_m2 = precio / area
-    kpi1.metric(label="Precio Entrada / m²", value=f"${px_m2/1000000:,.1f}M", delta="-45% vs Mercado (Est)")
-    kpi2.metric(label="Cap Rate Estimado", value="0.5%", delta_color="off", help="Irrelevante si es Patrimonio")
-    kpi3.metric(label="Potencial Valorización", value="Alta", delta="Zona Prime")
-
-    st.divider()
-
-    # EL TEXTO DEL EXPERTO (CHAT)
-    with st.chat_message("assistant", avatar="🦅"):
-        st.markdown(last_msg)
+        ### 1. VEREDICTO EJECUTIVO
+        **DECISIÓN:** [APROBADO / RECHAZADO]
+        **TESIS:** [Resumen estratégico]
         
-    # ZONA DE INTELIGENCIA DE MERCADO (EVIDENCIA)
-    with st.expander("🕵️ Ver Evidencia de Mercado (Lo que encontró Gladius)"):
-        st.code(st.session_state.market_data)
-
-# --- 7. CHAT INTERACTIVO ---
-if prompt := st.chat_input("Desafía los supuestos del CIO..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
-    
-    client.beta.threads.messages.create(thread_id=st.session_state.thread_id, role="user", content=prompt)
-    run = client.beta.threads.runs.create(thread_id=st.session_state.thread_id, assistant_id=assistant_id)
-    
-    with st.spinner("Re-calculando modelo financiero..."):
-        while run.status != "completed":
-            time.sleep(1)
-            run = client.beta.threads.runs.retrieve(thread_id=st.session_state.thread_id, run_id=run.id)
-            
-    msgs = client.beta.threads.messages.list(thread_id=st.session_state.thread_id)
-    new_text = msgs.data[0].content[0].text.value
-    
-    with st.chat_message("assistant", avatar="🦅"):
-        st.markdown(new_text)
-    st.session_state.messages.append({"role": "assistant", "content": new_text})
+        ### 2. SUPUESTOS
